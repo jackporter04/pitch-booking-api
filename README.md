@@ -24,6 +24,16 @@ curl http://localhost:3000/health
 
 `/health` returns `503` if the database is unreachable.
 
+## Endpoints
+
+| Method | Path | Purpose | Auth |
+| --- | --- | --- | --- |
+| GET | `/health` | Service and database status | No |
+| POST | `/auth/register` | Create an account, returns a JWT | No |
+| POST | `/auth/login` | Log in, returns a JWT | No |
+
+Protected routes expect an `Authorization: Bearer <token>` header. Tokens expire after 24 hours.
+
 ## Scripts
 
 | Command | Purpose |
@@ -48,4 +58,7 @@ Design decisions:
 
 - **Pre-generated slots.** A booking claims an existing slot row rather than checking for overlapping time ranges on every write.
 - **Soft cancellation.** Cancelling sets `status = 'cancelled'` and keeps the row, so booking history is preserved. Foreign keys from bookings are `RESTRICT` so a booked slot or user can't be silently deleted.
+- **Passwords hashed with bcrypt** (12 rounds) and never returned by the API. Emails are trimmed and lowercased so `Jack@x.com` and `jack@x.com` are one account.
+- **Login doesn't reveal which emails are registered.** Unknown emails and wrong passwords get the same 401 message, and unknown emails are still checked against a dummy hash so both take the same time.
+- **Duplicate sign-ups are caught by the database's unique constraint**, not a "check then insert", which two simultaneous requests could both pass.
 - **Integrity in the database, not just the app.** Check constraints enforce `start_time < end_time`, `opening_time < closing_time` and non-negative prices; booking status is a Postgres enum.
