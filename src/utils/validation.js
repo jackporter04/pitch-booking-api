@@ -61,7 +61,30 @@ function validateRegistration({ email, password, name }) {
   return errors;
 }
 
+// Parses an id from a URL or request body. Returns the number, or null if the
+// value isn't a positive whole number (e.g. "abc", "-5", "1.5").
+function parseId(value) {
+  const text = String(value);
+  if (!/^[1-9][0-9]{0,9}$/.test(text)) {
+    return null;
+  }
+  const id = Number(text);
+  // Postgres "integer" columns max out at 2,147,483,647.
+  return id <= 2147483647 ? id : null;
+}
+
+// Checks a "YYYY-MM-DD" string is a real calendar date (rejects 2026-02-30).
+function isValidDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);
+}
+
 module.exports = {
+  parseId,
+  isValidDate,
   normaliseEmail,
   isValidEmail,
   checkPassword,

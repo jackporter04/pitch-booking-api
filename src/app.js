@@ -1,6 +1,9 @@
 const express = require('express');
 const healthRouter = require('./routes/health');
 const authRouter = require('./routes/auth');
+const venuesRouter = require('./routes/venues');
+const pitchesRouter = require('./routes/pitches');
+const bookingsRouter = require('./routes/bookings');
 
 const app = express();
 
@@ -8,6 +11,9 @@ app.use(express.json());
 
 app.use('/health', healthRouter);
 app.use('/auth', authRouter);
+app.use('/venues', venuesRouter);
+app.use('/pitches', pitchesRouter);
+app.use('/bookings', bookingsRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });

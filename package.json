@@ -9,6 +9,7 @@
     "migrate": "knex migrate:latest",
     "migrate:rollback": "knex migrate:rollback",
     "migrate:make": "knex migrate:make",
+    "seed": "knex seed:run",
     "test": "echo \"No tests yet\" && exit 0"
   },
   "engines": {

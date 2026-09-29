@@ -12,6 +12,7 @@ Requirements: Node.js 20+ and a PostgreSQL database (a local install, or `docker
 npm install
 cp .env.example .env      # then set DATABASE_URL and JWT_SECRET
 npm run migrate           # create the schema
+npm run seed              # optional: example venues, pitches and 14 days of slots
 npm run dev               # start with auto-reload on http://localhost:3000
 ```
 
@@ -31,8 +32,14 @@ curl http://localhost:3000/health
 | GET | `/health` | Service and database status | No |
 | POST | `/auth/register` | Create an account, returns a JWT | No |
 | POST | `/auth/login` | Log in, returns a JWT | No |
+| GET | `/venues` | List venues | No |
+| GET | `/venues/:id` | One venue and its pitches | No |
+| GET | `/pitches/:id/slots?date=YYYY-MM-DD` | A pitch's slots for a UK calendar day, with availability | No |
+| POST | `/bookings` | Book a slot: `{ "slot_id": 42 }` | Yes |
 
 Protected routes expect an `Authorization: Bearer <token>` header. Tokens expire after 24 hours.
+
+Times are returned as UTC ISO 8601 strings (e.g. `2026-10-03T18:00:00.000Z`). Prices are returned as strings (e.g. `"60.00"`) to avoid floating-point rounding.
 
 ## Scripts
 
@@ -43,6 +50,7 @@ Protected routes expect an `Authorization: Bearer <token>` header. Tokens expire
 | `npm run migrate` | Apply pending migrations |
 | `npm run migrate:rollback` | Roll back the last migration batch |
 | `npm run migrate:make <name>` | Create a new migration file |
+| `npm run seed` | Reset venues, pitches, slots and bookings to example data (users are kept) |
 
 ## Data model
 
@@ -57,6 +65,8 @@ Protected routes expect an `Authorization: Bearer <token>` header. Tokens expire
 Design decisions:
 
 - **Pre-generated slots.** A booking claims an existing slot row rather than checking for overlapping time ranges on every write.
+- **UK time zone for venues.** Opening hours and `?date=` are UK local time (`Europe/London`); slots are stored as exact moments, so a 19:00 slot stays at 19:00 across the GMT/BST clock change regardless of the server's own time zone.
+- **Availability in one query.** Slots are left-joined to *confirmed* bookings, so a cancelled booking frees its slot, and slots that have already started are shown as unavailable.
 - **Soft cancellation.** Cancelling sets `status = 'cancelled'` and keeps the row, so booking history is preserved. Foreign keys from bookings are `RESTRICT` so a booked slot or user can't be silently deleted.
 - **Passwords hashed with bcrypt** (12 rounds) and never returned by the API. Emails are trimmed and lowercased so `Jack@x.com` and `jack@x.com` are one account.
 - **Login doesn't reveal which emails are registered.** Unknown emails and wrong passwords get the same 401 message, and unknown emails are still checked against a dummy hash so both take the same time.
