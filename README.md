@@ -35,7 +35,9 @@ curl http://localhost:3000/health
 | GET | `/venues` | List venues | No |
 | GET | `/venues/:id` | One venue and its pitches | No |
 | GET | `/pitches/:id/slots?date=YYYY-MM-DD` | A pitch's slots for a UK calendar day, with availability | No |
-| POST | `/bookings` | Book a slot: `{ "slot_id": 42 }` | Yes |
+| POST | `/bookings` | Book a slot: `{ "slot_id": 42 }`. `409` if it's already booked | Yes |
+| GET | `/bookings/me` | The logged-in user's bookings, including cancelled ones | Yes |
+| DELETE | `/bookings/:id` | Cancel a booking. `403` unless you own it | Yes |
 
 Protected routes expect an `Authorization: Bearer <token>` header. Tokens expire after 24 hours.
 
@@ -62,8 +64,25 @@ Times are returned as UTC ISO 8601 strings (e.g. `2026-10-03T18:00:00.000Z`). Pr
 | Slot | id, pitch_id, start_time, end_time | One bookable window on one pitch; unique per (pitch, start_time) |
 | Booking | id, slot_id, user_id, status, created_at | `status` is `confirmed` or `cancelled` |
 
-Design decisions:
+## Preventing double-booking
 
+Two people booking the same slot within milliseconds is a race condition: if the code checked "is this slot free?" and then inserted, both requests could pass the check before either insert landed.
+
+So there is no such check. The guarantee lives in the database as a partial unique index:
+
+```sql
+CREATE UNIQUE INDEX bookings_one_confirmed_per_slot
+ON bookings (slot_id)
+WHERE status = 'confirmed';
+```
+
+`POST /bookings` attempts the insert inside a transaction. Postgres accepts the first and refuses any other, and the API translates that unique violation into `409 Conflict` rather than leaking a database error. Because the index only covers *confirmed* rows, cancelling a booking frees its slot to be booked again.
+
+## Design decisions
+
+- **Authentication vs authorisation.** A valid token proves who you are (`401` without one); it doesn't let you act on other people's bookings (`403`). The user is always taken from the token, never from the request body.
+- **Cancelling is race-safe too.** The update only applies to a booking that is still confirmed, so two simultaneous cancels give one `200` and one `409`. Bookings can't be cancelled once the slot has started.
+- **Opening hours are enforced by construction.** Only slots can be booked, and slots only exist within a venue's opening hours.
 - **Pre-generated slots.** A booking claims an existing slot row rather than checking for overlapping time ranges on every write.
 - **UK time zone for venues.** Opening hours and `?date=` are UK local time (`Europe/London`); slots are stored as exact moments, so a 19:00 slot stays at 19:00 across the GMT/BST clock change regardless of the server's own time zone.
 - **Availability in one query.** Slots are left-joined to *confirmed* bookings, so a cancelled booking frees its slot, and slots that have already started are shown as unavailable.

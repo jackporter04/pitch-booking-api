@@ -1,12 +1,10 @@
 const { Router } = require('express');
 const db = require('../db');
+const { isUniqueViolation } = require('../db/errors');
 const { normaliseEmail, validateRegistration } = require('../utils/validation');
 const { hashPassword, comparePassword, signToken, DUMMY_HASH } = require('../utils/auth');
 
 const router = Router();
-
-// Postgres error code for a unique constraint violation.
-const UNIQUE_VIOLATION = '23505';
 
 function toPublicUser(user) {
   return { id: user.id, email: user.email, name: user.name };
@@ -34,7 +32,7 @@ router.post('/register', async (req, res) => {
   } catch (err) {
     // Rely on the database's unique constraint rather than checking first:
     // a "check then insert" would let two simultaneous sign-ups both pass.
-    if (err.code === UNIQUE_VIOLATION) {
+    if (isUniqueViolation(err)) {
       return res.status(409).json({ error: 'An account with that email already exists' });
     }
     throw err;
